@@ -9,14 +9,24 @@ import (
 func CopyUp(state *OnionState, virtualPath string) (string, error) {
 
 	lowerDirFilepath := filepath.Join(state.LowerDir, virtualPath)
+	upperDirFilepath := filepath.Join(state.UpperDir, virtualPath)
+
+	// stat the file in the lower dir to get the permission bits
 	fi, err := os.Stat(lowerDirFilepath)
 	if err != nil {
 		return "", err
 	}
-	permBits := fi.Mode().Perm()
+	filePermBits := fi.Mode().Perm()
 
-	// create the dir need to make sure to preserve the perms
-	err = os.MkdirAll(filepath.Dir(lowerDirFilepath), permBits)
+	// stat the dir to get the permission bits of the dir
+	dirFi, err := os.Stat(filepath.Dir(lowerDirFilepath))
+	if err != nil {
+		return "", err
+	}
+	dirPermBits := dirFi.Mode().Perm()
+
+	// create the dir need to make sure to preserve the perm
+	err = os.MkdirAll(filepath.Dir(upperDirFilepath), dirPermBits)
 	if err != nil {
 		return "", err
 	}
@@ -28,8 +38,6 @@ func CopyUp(state *OnionState, virtualPath string) (string, error) {
 	}
 	defer sourceFile.Close()
 
-	// copy the actual file to upper dir
-	upperDirFilepath := filepath.Join(state.UpperDir, virtualPath)
 	upperDirFile, err := os.Create(upperDirFilepath)
 	if err != nil {
 		return "", err
@@ -43,7 +51,7 @@ func CopyUp(state *OnionState, virtualPath string) (string, error) {
 	}
 
 	// change permission bits to reflect the original content
-	err = os.Chmod(upperDirFilepath, permBits)
+	err = os.Chmod(upperDirFilepath, filePermBits)
 	if err != nil {
 		return "", err
 	}
