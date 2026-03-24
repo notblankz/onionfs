@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func WhiteoutName(filename string) string {
@@ -17,6 +18,19 @@ func IsWhitedOut(state *OnionState, virtualPath string) bool {
 	}
 
 	return false
+}
+
+func IsWhiteoutFile(name string) bool {
+	return strings.HasPrefix(name, ".wh.")
+}
+
+func WhiteoutTarget(name string) string {
+	processedName, ok := strings.CutPrefix(name, ".wh.")
+	if !ok {
+		return name
+	}
+
+	return processedName
 }
 
 func CreateWhiteout(state *OnionState, virtualPath string) error {

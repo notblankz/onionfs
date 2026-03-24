@@ -23,9 +23,9 @@ var _ = (fs.NodeReader)((*FileNode)(nil))
 var _ = (fs.NodeWriter)((*FileNode)(nil))
 
 // function to get Metadata of INODE and pass it to the kernel
-func (fi *FileNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (fn *FileNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 
-	resolvedPath, _, err := core.ResolvePath(fi.State, fi.VirtualPath)
+	resolvedPath, _, err := core.ResolvePath(fn.State, fn.VirtualPath)
 	if err != nil {
 		return syscall.ENOENT
 	}
@@ -41,10 +41,10 @@ func (fi *FileNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.Attr
 	return 0
 }
 
-func (fi *FileNode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
+func (fn *FileNode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 
 	// resolve path
-	resolvedPath, location, err := core.ResolvePath(fi.State, fi.VirtualPath)
+	resolvedPath, location, err := core.ResolvePath(fn.State, fn.VirtualPath)
 	if err != nil {
 		return nil, 0, syscall.ENOENT
 	}
@@ -53,7 +53,7 @@ func (fi *FileNode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 	isWrite := (flags&syscall.O_WRONLY) != 0 || (flags&syscall.O_RDWR) != 0
 
 	if isWrite && location == core.LocationLower {
-		resolvedPath, err = core.CopyUp(fi.State, fi.VirtualPath)
+		resolvedPath, err = core.CopyUp(fn.State, fn.VirtualPath)
 		if err != nil {
 			return nil, 0, syscall.EIO
 		}
@@ -66,7 +66,7 @@ func (fi *FileNode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 	return f, fuse.FOPEN_KEEP_CACHE, 0
 }
 
-func (fi *FileNode) Read(ctx context.Context, f fs.FileHandle, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+func (fn *FileNode) Read(ctx context.Context, f fs.FileHandle, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	// typecast fs.FileHandle to os.File to access ReadAt
 	file := f.(*os.File)
 
@@ -78,7 +78,7 @@ func (fi *FileNode) Read(ctx context.Context, f fs.FileHandle, dest []byte, off 
 	return fuse.ReadResultData(dest[:n]), 0
 }
 
-func (fi *FileNode) Write(ctx context.Context, f fs.FileHandle, data []byte, off int64) (written uint32, errno syscall.Errno) {
+func (fn *FileNode) Write(ctx context.Context, f fs.FileHandle, data []byte, off int64) (written uint32, errno syscall.Errno) {
 	// typecast fs.FileHandle to os.File to access WriteAt
 	file := f.(*os.File)
 

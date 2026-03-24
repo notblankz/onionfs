@@ -13,18 +13,18 @@ const (
 )
 
 func Info(format string, args ...any) {
-	fmt.Fprintf(os.Stdout, colorGreen+"[INFO] "+colorReset+format, args...)
+	fmt.Fprintf(os.Stdout, colorGreen+"[INFO] "+colorReset+format+"\n", args...)
 }
 
 func Error(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorRed+"[ERROR] "+colorReset+format, args...)
+	fmt.Fprintf(os.Stderr, colorRed+"[ERROR] "+colorReset+format+"\n", args...)
 }
 
 func Fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorRed+"[FATAL] "+colorReset+format, args...)
+	fmt.Fprintf(os.Stderr, colorRed+"[FATAL] "+colorReset+format+"\n", args...)
 	os.Exit(1)
 }
 
 func Warn(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorYellow+"[WARN]  "+colorReset+format, args...)
+	fmt.Fprintf(os.Stderr, colorYellow+"[WARN] "+colorReset+format+"\n", args...)
 }
