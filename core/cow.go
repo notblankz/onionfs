@@ -58,3 +58,19 @@ func CopyUp(state *OnionState, virtualPath string) (string, error) {
 
 	return upperDirFilepath, nil
 }
+
+func ResolveAndCopyUp(state *OnionState, virtualPath string) (string, error) {
+	resolvedPath, location, err := ResolvePath(state, virtualPath)
+	if err != nil {
+		return "", err
+	}
+
+	if location == LocationLower {
+		resolvedPath, err = CopyUp(state, virtualPath)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return resolvedPath, nil
+}
