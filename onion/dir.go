@@ -2,7 +2,9 @@ package onion
 
 import (
 	"context"
+	"errors"
 	"onionfs/core"
+	"onionfs/ui"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -20,6 +22,9 @@ type DirNode struct {
 var _ = (fs.NodeGetattrer)((*DirNode)(nil))
 var _ = (fs.NodeReaddirer)((*DirNode)(nil))
 var _ = (fs.NodeLookuper)((*DirNode)(nil))
+var _ = (fs.NodeMkdirer)((*DirNode)(nil))
+var _ = (fs.NodeCreater)((*DirNode)(nil))
+var _ = (fs.NodeUnlinker)((*DirNode)(nil))
 
 func (dn *DirNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 
@@ -33,7 +38,7 @@ func (dn *DirNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrO
 		return syscall.EIO
 	}
 
-	out.Attr.FromStat(fuse.ToStatT(di))
+	out.Attr = *fuse.ToAttr(di)
 	out.AttrValid = 1
 
 	return 0
@@ -57,7 +62,7 @@ func (dn *DirNode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	upperDir := filepath.Join(dn.State.UpperDir, dn.VirtualPath)
 	// all entries in the upper directory
 	upperDirEntries, err := os.ReadDir(upperDir)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, syscall.ENOENT
 	}
 	for _, entry := range upperDirEntries {
@@ -70,6 +75,7 @@ func (dn *DirNode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 				}
 				entries = append(entries, fuseDirEntry)
 				seen[core.WhiteoutTarget(entry.Name())] = true
+				seen[entry.Name()] = true
 			}
 			// whiteout file skip & add to whiteout
 			whiteout[core.WhiteoutTarget(entry.Name())] = true
@@ -126,7 +132,28 @@ func (dn *DirNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 	// - if its a dir then do the same thing with a DirNode
 
 	if core.IsWhiteoutFile(name) {
-		return nil, syscall.ENOENT
+		if dn.State.HideMeta {
+			return nil, syscall.ENOENT
+		}
+
+		// we need to return the .wh. file INODE if the HideMeta flag is set to false
+		whiteoutRealPath := filepath.Join(dn.State.UpperDir, dn.VirtualPath, name)
+		fi, err := os.Stat(whiteoutRealPath)
+		if err != nil {
+			return nil, syscall.ENOENT
+		}
+		stat := fuse.ToStatT(fi)
+		out.Attr.FromStat(stat)
+		out.AttrValid = 1
+		out.EntryValid = 0
+		child := &FileNode{
+			State:       dn.State,
+			VirtualPath: filepath.Join(dn.VirtualPath, name),
+		}
+		return dn.NewInode(ctx, child, fs.StableAttr{
+			Mode: fuse.S_IFREG,
+			Ino:  stat.Ino,
+		}), 0
 	}
 
 	childVirtualPath := filepath.Join(dn.VirtualPath, name)
@@ -144,7 +171,6 @@ func (dn *DirNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 	stat := fuse.ToStatT(fi)
 	out.Attr.FromStat(stat)
 	out.AttrValid = 1
-	out.EntryValid = 1
 
 	if fi.IsDir() {
 		child := &DirNode{
@@ -167,6 +193,90 @@ func (dn *DirNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 		}
 		return dn.NewInode(ctx, child, stableAttr), 0
 	}
+}
+
+func (dn *DirNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+
+	newDirVirtualPath := filepath.Join(dn.VirtualPath, name)
+
+	fullPath := filepath.Join(dn.State.UpperDir, newDirVirtualPath)
+
+	err := os.Mkdir(fullPath, os.FileMode(mode))
+	if err != nil {
+		return nil, syscall.EIO
+	}
+
+	out.AttrValid = 1
+	out.EntryValid = 1
+
+	di, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, syscall.EIO
+	}
+	diStatT := fuse.ToStatT(di)
+	out.Attr.FromStat(diStatT)
+
+	newDir := &DirNode{
+		State:       dn.State,
+		VirtualPath: newDirVirtualPath,
+	}
+	stableAttr := fs.StableAttr{
+		Mode: fuse.S_IFDIR,
+		Ino:  diStatT.Ino,
+	}
+
+	return dn.NewInode(ctx, newDir, stableAttr), 0
+}
+
+func (dn *DirNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (node *fs.Inode, fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
+
+	newFileVirtualPath := filepath.Join(dn.VirtualPath, name)
+
+	fullPath := filepath.Join(dn.State.UpperDir, newFileVirtualPath)
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return nil, nil, 0, syscall.EIO
+	}
+
+	file, err := os.OpenFile(fullPath, int(flags)|os.O_CREATE, os.FileMode(mode))
+	if err != nil {
+		return nil, nil, 0, syscall.EIO
+	}
+
+	out.AttrValid = 1
+	out.EntryValid = 1
+
+	fi, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, nil, 0, syscall.EIO
+	}
+	fiStatT := fuse.ToStatT(fi)
+	out.Attr.FromStat(fiStatT)
+
+	newFile := &FileNode{
+		State:       dn.State,
+		VirtualPath: newFileVirtualPath,
+	}
+	stableAttr := fs.StableAttr{
+		Mode: fuse.S_IFREG,
+		Ino:  fiStatT.Ino,
+	}
+
+	return dn.NewInode(ctx, newFile, stableAttr), file, fuse.FOPEN_KEEP_CACHE, 0
+}
+
+func (dn *DirNode) Unlink(ctx context.Context, name string) syscall.Errno {
+
+	toDeleteVirtualPath := filepath.Join(dn.VirtualPath, name)
+
+	ui.Info("Received Virtual Path to Delete: %s", toDeleteVirtualPath)
+
+	err := core.CreateWhiteout(dn.State, toDeleteVirtualPath)
+	if err != 0 {
+		return err
+	}
+
+	return 0
 }
 
 // -- HELPER --

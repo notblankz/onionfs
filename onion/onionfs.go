@@ -11,7 +11,7 @@ func Mount(state *core.OnionState) error {
 	root := &DirNode{State: state, VirtualPath: "/"}
 	server, err := fs.Mount(state.MountPoint, root, &fs.Options{
 		MountOptions: fuse.MountOptions{
-			Debug:  true,
+			Debug:  false,
 			FsName: "onionfs",
 			Name:   "onionfs",
 		},

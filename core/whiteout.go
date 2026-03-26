@@ -1,9 +1,12 @@
 package core
 
 import (
+	"errors"
+	"onionfs/ui"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 func WhiteoutName(filename string) string {
@@ -33,22 +36,58 @@ func WhiteoutTarget(name string) string {
 	return processedName
 }
 
-func CreateWhiteout(state *OnionState, virtualPath string) error {
-	// this will be called only for deletion in lowerdir
-	// since we can directly unlink if it is in upper
-	whiteoutDir := filepath.Join(state.UpperDir, filepath.Dir(virtualPath))
-	if err := os.MkdirAll(whiteoutDir, 0755); err != nil {
-		return err
+func CreateWhiteout(state *OnionState, virtualPath string) syscall.Errno {
+	// check the existence in upper directory - if it does then just delete it
+	// now check its existence in lower dir - if it does then make .wh. file
+	// and the checks should not err if file not found
+
+	upperDirPath := filepath.Join(state.UpperDir, virtualPath)
+	lowerDirPath := filepath.Join(state.LowerDir, virtualPath)
+
+	ui.Info("Upper Dir Path to Delete: %s", upperDirPath)
+	ui.Info("Lower Dir Path to Delete: %s", lowerDirPath)
+
+	_, errUpper := os.Stat(upperDirPath)
+	upperExists := errUpper == nil
+	if errUpper != nil && !errors.Is(errUpper, os.ErrNotExist) {
+		return syscall.EIO
 	}
 
-	// get whiteout file absolute path
-	filename := filepath.Base(virtualPath)
-	whiteoutFile := filepath.Join(whiteoutDir, WhiteoutName(filename))
-	// create the whiteout file - marking the file in lower dir deleted for the merged fs
-	f, err := os.Create(whiteoutFile)
-	if err != nil {
-		return err
+	_, errLower := os.Stat(lowerDirPath)
+	lowerExists := errLower == nil
+	if errLower != nil && !errors.Is(errLower, os.ErrNotExist) {
+		return syscall.EIO
 	}
-	defer f.Close()
-	return nil
+
+	if !upperExists && !lowerExists {
+		return syscall.ENOENT
+	}
+
+	if upperExists {
+		err := os.Remove(upperDirPath)
+		if err != nil {
+			return syscall.EIO
+		}
+		ui.Info("Finished Deleting: %s", upperDirPath)
+	}
+
+	if lowerExists {
+		whiteoutDir := filepath.Join(state.UpperDir, filepath.Dir(virtualPath))
+		if err := os.MkdirAll(whiteoutDir, 0755); err != nil {
+			return syscall.EIO
+		}
+
+		whiteoutPath := filepath.Join(whiteoutDir, WhiteoutName(filepath.Base(virtualPath)))
+
+		f, err := os.Create(whiteoutPath)
+		if err != nil {
+			return syscall.EIO
+		}
+		f.Close()
+		ui.Info("Finished creating whiteout file: %s", whiteoutPath)
+	}
+
+	ui.Info("Successfully deleted: %s", virtualPath)
+
+	return 0
 }
