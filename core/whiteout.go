@@ -44,9 +44,6 @@ func CreateWhiteout(state *OnionState, virtualPath string) syscall.Errno {
 	upperDirPath := filepath.Join(state.UpperDir, virtualPath)
 	lowerDirPath := filepath.Join(state.LowerDir, virtualPath)
 
-	ui.Info("Upper Dir Path to Delete: %s", upperDirPath)
-	ui.Info("Lower Dir Path to Delete: %s", lowerDirPath)
-
 	_, errUpper := os.Stat(upperDirPath)
 	upperExists := errUpper == nil
 	if errUpper != nil && !errors.Is(errUpper, os.ErrNotExist) {
@@ -68,7 +65,6 @@ func CreateWhiteout(state *OnionState, virtualPath string) syscall.Errno {
 		if err != nil {
 			return syscall.EIO
 		}
-		ui.Info("Finished Deleting: %s", upperDirPath)
 	}
 
 	if lowerExists {
@@ -84,10 +80,8 @@ func CreateWhiteout(state *OnionState, virtualPath string) syscall.Errno {
 			return syscall.EIO
 		}
 		f.Close()
-		ui.Info("Finished creating whiteout file: %s", whiteoutPath)
+		ui.Info("[WHITEOUT] Finished creating whiteout path: %s", whiteoutPath)
 	}
-
-	ui.Info("Successfully deleted: %s", virtualPath)
 
 	return 0
 }

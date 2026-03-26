@@ -25,6 +25,7 @@ var _ = (fs.NodeLookuper)((*DirNode)(nil))
 var _ = (fs.NodeMkdirer)((*DirNode)(nil))
 var _ = (fs.NodeCreater)((*DirNode)(nil))
 var _ = (fs.NodeUnlinker)((*DirNode)(nil))
+var _ = (fs.NodeRmdirer)((*DirNode)(nil))
 
 func (dn *DirNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 
@@ -269,12 +270,39 @@ func (dn *DirNode) Unlink(ctx context.Context, name string) syscall.Errno {
 
 	toDeleteVirtualPath := filepath.Join(dn.VirtualPath, name)
 
-	ui.Info("Received Virtual Path to Delete: %s", toDeleteVirtualPath)
+	ui.Info("[UNLINK] Received File to Delete: %s", toDeleteVirtualPath)
 
 	err := core.CreateWhiteout(dn.State, toDeleteVirtualPath)
 	if err != 0 {
 		return err
 	}
+
+	ui.Info("[UNLINK] Successfully deleted File %s", toDeleteVirtualPath)
+
+	return 0
+}
+
+func (dn *DirNode) Rmdir(ctx context.Context, name string) syscall.Errno {
+
+	toDeleteVirtualPath := filepath.Join(dn.VirtualPath, name)
+
+	ui.Info("[RMDIR] Received Directory to Delete: %s", toDeleteVirtualPath)
+
+	isEmpty, err := dn.isDirEmpty(ctx, name)
+	if err != 0 {
+		return err
+	}
+	if !isEmpty {
+		ui.Error("[RMDIR] %s is not empty", toDeleteVirtualPath)
+		return syscall.ENOTEMPTY
+	}
+
+	err = core.CreateWhiteout(dn.State, toDeleteVirtualPath)
+	if err != 0 {
+		return err
+	}
+
+	ui.Info("[RMDIR] Successfully deleted Directory: %s", toDeleteVirtualPath)
 
 	return 0
 }
@@ -294,4 +322,35 @@ func toFuseDirEntry(entry os.DirEntry) (fuse.DirEntry, error) {
 	}
 
 	return fuseDirEntry, nil
+}
+
+func (dn *DirNode) isDirEmpty(ctx context.Context, name string) (bool, syscall.Errno) {
+
+	// create a dummy child node with the children in its virtual path
+	child := &DirNode{
+		State:       dn.State,
+		VirtualPath: filepath.Join(dn.VirtualPath, name),
+	}
+
+	// use the OnionFS implemented Read dir (instead of os.ReadDir)
+	// - this makes sure we read the merged dir i.e. combining R/W and R/O layers + skipping whiteout files
+	dirStream, err := child.Readdir(ctx)
+	if err != 0 {
+		return false, err
+	}
+
+	// traverse the child directory to check if its empty
+	for dirStream.HasNext() {
+		entry, err := dirStream.Next()
+		if err != 0 {
+			return false, err
+		}
+		// if we encounter anything except "." <- This directory or Parent directory -> ".." entries
+		// - that means the child directory has children hence return false
+		if entry.Name != "." && entry.Name != ".." {
+			return false, 0
+		}
+	}
+
+	return true, 0
 }
