@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"onionfs/ui"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,7 +79,6 @@ func CreateWhiteout(state *OnionState, virtualPath string) syscall.Errno {
 			return syscall.EIO
 		}
 		f.Close()
-		ui.Info("[WHITEOUT] Finished creating whiteout path: %s", whiteoutPath)
 	}
 
 	return 0

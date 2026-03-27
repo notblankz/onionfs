@@ -2,6 +2,7 @@ package core
 
 import (
 	"io"
+	"onionfs/ui"
 	"os"
 	"path/filepath"
 )
@@ -56,10 +57,13 @@ func CopyUp(state *OnionState, virtualPath string) (string, error) {
 		return "", err
 	}
 
+	ui.Info("[CORE][CopyUp]", "%s copied up to upper directory", virtualPath)
+
 	return upperDirFilepath, nil
 }
 
 func ResolveAndCopyUp(state *OnionState, virtualPath string) (string, error) {
+
 	resolvedPath, location, err := ResolvePath(state, virtualPath)
 	if err != nil {
 		return "", err

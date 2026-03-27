@@ -6,25 +6,22 @@ import (
 )
 
 const (
-	colorReset  = "\033[0m"
-	colorRed    = "\033[31m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
+	colorReset     = "\033[0m"
+	colorBoldRed   = "\033[1;31m"
+	colorBoldGreen = "\033[1;32m"
+	colorYellow    = "\033[33m"
+	colorBlue      = "\033[34m"
 )
 
-func Info(format string, args ...any) {
-	fmt.Fprintf(os.Stdout, colorGreen+"[INFO] "+colorReset+format+"\n", args...)
+func Info(scope string, format string, args ...any) {
+	fmt.Fprintf(os.Stdout, colorBoldGreen+"[INFO] "+colorBlue+scope+" "+colorReset+format+"\n", args...)
 }
 
-func Error(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorRed+"[ERROR] "+colorReset+format+"\n", args...)
+func Error(scope string, format string, args ...any) {
+	fmt.Fprintf(os.Stderr, colorBoldRed+"[ERROR] "+colorYellow+scope+" "+colorReset+format+"\n", args...)
 }
 
-func Fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorRed+"[FATAL] "+colorReset+format+"\n", args...)
+func Fatal(scope string, format string, args ...any) {
+	fmt.Fprintf(os.Stderr, colorBoldRed+"[FATAL] "+colorBlue+scope+" "+colorReset+format+"\n", args...)
 	os.Exit(1)
-}
-
-func Warn(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorYellow+"[WARN] "+colorReset+format+"\n", args...)
 }

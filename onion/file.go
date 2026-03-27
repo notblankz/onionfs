@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"onionfs/core"
+	"onionfs/ui"
 	"os"
 	"syscall"
 	"time"
@@ -81,6 +82,7 @@ func (fn *FileNode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAt
 		if err != nil {
 			return syscall.EIO
 		}
+		ui.Info("[TRUNCATE] %s -> size=%d", fn.VirtualPath, in.Size)
 	}
 
 	if (in.Valid & fuse.FATTR_MODE) != 0 {
@@ -88,6 +90,7 @@ func (fn *FileNode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAt
 		if err != nil {
 			return syscall.EIO
 		}
+		ui.Info("[CHMOD] %s -> mode=%o", fn.VirtualPath, in.Mode)
 	}
 
 	if (in.Valid&fuse.FATTR_GID) != 0 || (in.Valid&fuse.FATTR_UID) != 0 {
@@ -103,6 +106,7 @@ func (fn *FileNode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAt
 		if err != nil {
 			return syscall.EIO
 		}
+		ui.Info("[CHOWN] %s -> uid=%d gid=%d", fn.VirtualPath, in.Owner.Uid, in.Owner.Gid)
 	}
 
 	if (in.Valid&fuse.FATTR_ATIME) != 0 || (in.Valid&fuse.FATTR_MTIME) != 0 {
