@@ -203,8 +203,24 @@ func (dn *DirNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 
 	fullPath := filepath.Join(dn.State.UpperDir, newDirVirtualPath)
 
+	// check if the dir being created already exists in lower dir/upper dir
+	_, _, resolvedErr := core.ResolvePath(dn.State, newDirVirtualPath)
+	if resolvedErr == nil {
+		return nil, syscall.EEXIST
+	}
+
+	// check for a whiteout marker for the directory and remove it before proceeding to create dir
+	whiteoutFullPath := filepath.Join(dn.State.UpperDir, dn.VirtualPath, core.WhiteoutName(name))
+	removeErr := os.Remove(whiteoutFullPath)
+	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return nil, syscall.EIO
+	}
+
 	err := os.Mkdir(fullPath, os.FileMode(mode))
 	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return nil, syscall.EEXIST
+		}
 		return nil, syscall.EIO
 	}
 
@@ -235,6 +251,19 @@ func (dn *DirNode) Create(ctx context.Context, name string, flags uint32, mode u
 	newFileVirtualPath := filepath.Join(dn.VirtualPath, name)
 
 	fullPath := filepath.Join(dn.State.UpperDir, newFileVirtualPath)
+
+	// same check as Mkdir - checking for existence in upper dir/lower dir
+	_, _, resolvedPath := core.ResolvePath(dn.State, newFileVirtualPath)
+	if resolvedPath == nil {
+		return nil, nil, 0, syscall.EEXIST
+	}
+
+	// here we remove the whitout markers
+	whiteoutFullPath := filepath.Join(dn.State.UpperDir, dn.VirtualPath, core.WhiteoutName(name))
+	removeErr := os.Remove(whiteoutFullPath)
+	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return nil, nil, 0, syscall.EIO
+	}
 
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return nil, nil, 0, syscall.EIO
