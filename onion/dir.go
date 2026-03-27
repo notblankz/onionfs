@@ -26,6 +26,7 @@ var _ = (fs.NodeMkdirer)((*DirNode)(nil))
 var _ = (fs.NodeCreater)((*DirNode)(nil))
 var _ = (fs.NodeUnlinker)((*DirNode)(nil))
 var _ = (fs.NodeRmdirer)((*DirNode)(nil))
+var _ = (fs.NodeRenamer)((*DirNode)(nil))
 
 func (dn *DirNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 
@@ -302,7 +303,33 @@ func (dn *DirNode) Rmdir(ctx context.Context, name string) syscall.Errno {
 		return err
 	}
 
-	ui.Info("[RMDIR] Successfully deleted Directory: %s", toDeleteVirtualPath)
+	ui.Info("[RMDIR] Successfully removed directory: %s", toDeleteVirtualPath)
+
+	return 0
+}
+
+func (dn *DirNode) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
+
+	newParentNode, ok := newParent.(*DirNode)
+	if !ok {
+		return syscall.EIO
+	}
+
+	srcVirtualPath := filepath.Join(dn.VirtualPath, name)
+	dstVirtualPath := filepath.Join(newParentNode.VirtualPath, newName)
+
+	ui.Info("[RENAME] %s to %s", srcVirtualPath, dstVirtualPath)
+
+	srcResolvedPath, err := core.ResolveAndCopyUp(dn.State, srcVirtualPath)
+	if err != nil {
+		return syscall.ENOENT
+	}
+
+	if err := os.Rename(srcResolvedPath, filepath.Join(dn.State.UpperDir, dstVirtualPath)); err != nil {
+		return syscall.EIO
+	}
+
+	ui.Info("[RENAME] Successfully renamed %s to %s", srcVirtualPath, dstVirtualPath)
 
 	return 0
 }
