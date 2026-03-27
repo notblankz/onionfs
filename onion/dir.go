@@ -200,12 +200,14 @@ func (dn *DirNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 func (dn *DirNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 
 	newDirVirtualPath := filepath.Join(dn.VirtualPath, name)
-
 	fullPath := filepath.Join(dn.State.UpperDir, newDirVirtualPath)
+
+	ui.Info("[MKDIR]", "received directory to create: %s", newDirVirtualPath)
 
 	// check if the dir being created already exists in lower dir/upper dir
 	_, _, resolvedErr := core.ResolvePath(dn.State, newDirVirtualPath)
 	if resolvedErr == nil {
+		ui.Error("[MKDIR]", "already exists: %s", newDirVirtualPath)
 		return nil, syscall.EEXIST
 	}
 
@@ -213,14 +215,17 @@ func (dn *DirNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 	whiteoutFullPath := filepath.Join(dn.State.UpperDir, dn.VirtualPath, core.WhiteoutName(name))
 	removeErr := os.Remove(whiteoutFullPath)
 	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		ui.Error("[MKDIR]", "failed removing whiteout: %s (%v)", whiteoutFullPath, removeErr)
 		return nil, syscall.EIO
 	}
 
 	err := os.Mkdir(fullPath, os.FileMode(mode))
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
+			ui.Error("[MKDIR]", "already exists: %s", newDirVirtualPath)
 			return nil, syscall.EEXIST
 		}
+		ui.Error("[MKDIR]", "failed to create directory: %s (%v)", newDirVirtualPath, err)
 		return nil, syscall.EIO
 	}
 
@@ -229,6 +234,7 @@ func (dn *DirNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 
 	di, err := os.Stat(fullPath)
 	if err != nil {
+		ui.Error("[MKDIR]", "stat failed: %s (%v)", fullPath, err)
 		return nil, syscall.EIO
 	}
 	diStatT := fuse.ToStatT(di)
@@ -243,18 +249,22 @@ func (dn *DirNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 		Ino:  diStatT.Ino,
 	}
 
+	ui.Info("[MKDIR]", "successfully created directory: %s", newDirVirtualPath)
+
 	return dn.NewInode(ctx, newDir, stableAttr), 0
 }
 
 func (dn *DirNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (node *fs.Inode, fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 
 	newFileVirtualPath := filepath.Join(dn.VirtualPath, name)
-
 	fullPath := filepath.Join(dn.State.UpperDir, newFileVirtualPath)
 
+	ui.Info("[CREATE]", "received file to create: %s", newFileVirtualPath)
+
 	// same check as Mkdir - checking for existence in upper dir/lower dir
-	_, _, resolvedPath := core.ResolvePath(dn.State, newFileVirtualPath)
-	if resolvedPath == nil {
+	_, _, resolvedErr := core.ResolvePath(dn.State, newFileVirtualPath)
+	if resolvedErr == nil {
+		ui.Info("[CREATE]", "received file to create: %s", newFileVirtualPath)
 		return nil, nil, 0, syscall.EEXIST
 	}
 
@@ -262,15 +272,18 @@ func (dn *DirNode) Create(ctx context.Context, name string, flags uint32, mode u
 	whiteoutFullPath := filepath.Join(dn.State.UpperDir, dn.VirtualPath, core.WhiteoutName(name))
 	removeErr := os.Remove(whiteoutFullPath)
 	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		ui.Error("[CREATE]", "failed removing whiteout: %s (%v)", whiteoutFullPath, removeErr)
 		return nil, nil, 0, syscall.EIO
 	}
 
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		ui.Error("[CREATE]", "failed to create directory: %s (%v)", filepath.Dir(fullPath), err)
 		return nil, nil, 0, syscall.EIO
 	}
 
 	file, err := os.OpenFile(fullPath, int(flags)|os.O_CREATE, os.FileMode(mode))
 	if err != nil {
+		ui.Error("[CREATE]", "failed to open file: %s (%v)", newFileVirtualPath, err)
 		return nil, nil, 0, syscall.EIO
 	}
 
@@ -279,6 +292,7 @@ func (dn *DirNode) Create(ctx context.Context, name string, flags uint32, mode u
 
 	fi, err := os.Stat(fullPath)
 	if err != nil {
+		ui.Error("[CREATE]", "stat failed: %s (%v)", fullPath, err)
 		return nil, nil, 0, syscall.EIO
 	}
 	fiStatT := fuse.ToStatT(fi)
@@ -293,6 +307,8 @@ func (dn *DirNode) Create(ctx context.Context, name string, flags uint32, mode u
 		Ino:  fiStatT.Ino,
 	}
 
+	ui.Info("[CREATE]", "successfully created file: %s", newFileVirtualPath)
+
 	return dn.NewInode(ctx, newFile, stableAttr), file, fuse.FOPEN_KEEP_CACHE, 0
 }
 
@@ -300,14 +316,14 @@ func (dn *DirNode) Unlink(ctx context.Context, name string) syscall.Errno {
 
 	toDeleteVirtualPath := filepath.Join(dn.VirtualPath, name)
 
-	ui.Info("[UNLINK] Received File to Delete: %s", toDeleteVirtualPath)
+	ui.Info("[UNLINK]", "received file to delete: %s", toDeleteVirtualPath)
 
 	err := core.CreateWhiteout(dn.State, toDeleteVirtualPath)
 	if err != 0 {
 		return err
 	}
 
-	ui.Info("[UNLINK] Successfully deleted File %s", toDeleteVirtualPath)
+	ui.Info("[UNLINK]", "successfully deleted file %s", toDeleteVirtualPath)
 
 	return 0
 }
@@ -316,14 +332,14 @@ func (dn *DirNode) Rmdir(ctx context.Context, name string) syscall.Errno {
 
 	toDeleteVirtualPath := filepath.Join(dn.VirtualPath, name)
 
-	ui.Info("[RMDIR] Received Directory to Delete: %s", toDeleteVirtualPath)
+	ui.Info("[RMDIR]", "received directory to delete: %s", toDeleteVirtualPath)
 
 	isEmpty, err := dn.isDirEmpty(ctx, name)
 	if err != 0 {
 		return err
 	}
 	if !isEmpty {
-		ui.Error("[RMDIR] %s is not empty", toDeleteVirtualPath)
+		ui.Error("[RMDIR]", "%s is not empty", toDeleteVirtualPath)
 		return syscall.ENOTEMPTY
 	}
 
@@ -332,7 +348,7 @@ func (dn *DirNode) Rmdir(ctx context.Context, name string) syscall.Errno {
 		return err
 	}
 
-	ui.Info("[RMDIR] Successfully removed directory: %s", toDeleteVirtualPath)
+	ui.Info("[RMDIR]", "successfully removed directory: %s", toDeleteVirtualPath)
 
 	return 0
 }
@@ -347,7 +363,7 @@ func (dn *DirNode) Rename(ctx context.Context, name string, newParent fs.InodeEm
 	srcVirtualPath := filepath.Join(dn.VirtualPath, name)
 	dstVirtualPath := filepath.Join(newParentNode.VirtualPath, newName)
 
-	ui.Info("[RENAME] %s to %s", srcVirtualPath, dstVirtualPath)
+	ui.Info("[RENAME]", "%s to %s", srcVirtualPath, dstVirtualPath)
 
 	srcResolvedPath, err := core.ResolveAndCopyUp(dn.State, srcVirtualPath)
 	if err != nil {
@@ -358,7 +374,7 @@ func (dn *DirNode) Rename(ctx context.Context, name string, newParent fs.InodeEm
 		return syscall.EIO
 	}
 
-	ui.Info("[RENAME] Successfully renamed %s to %s", srcVirtualPath, dstVirtualPath)
+	ui.Info("[RENAME]", "successfully renamed %s to %s", srcVirtualPath, dstVirtualPath)
 
 	return 0
 }

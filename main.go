@@ -30,6 +30,7 @@ func main() {
 	version, _ := flag.CommandLine.GetBool("version")
 	if version {
 		ui.PrintVersion()
+		return
 	}
 
 	lowerDir, _ := flag.CommandLine.GetString("lower")
@@ -37,25 +38,23 @@ func main() {
 	mountpoint, _ := flag.CommandLine.GetString("mountpoint")
 
 	if len(lowerDir) == 0 || len(upperDir) == 0 || len(mountpoint) == 0 {
-		ui.Fatal("Missing required parameters")
+		ui.Fatal("[INIT]", "missing required parameters")
 		ui.PrintHelp()
 	}
 
 	lowerDirAbs, err := validatePath(lowerDir)
 	if err != nil {
-		ui.Fatal("%v", err)
-		os.Exit(0)
+		ui.Fatal("[INIT]", "invalid lower dir '%s': %v", lowerDir, err)
 	}
 
 	upperDirAbs, err := validatePath(upperDir)
 	if err != nil {
-		ui.Fatal("%v", err)
-		os.Exit(0)
+		ui.Fatal("[INIT]", "invalid upper dir '%s': %v", upperDir, err)
 	}
 
 	mountpointAbs, err := validatePath(mountpoint)
 	if err != nil {
-		ui.Fatal("%v", err)
+		ui.Fatal("[INIT]", "invalid mountpoint '%s': %v", mountpoint, err)
 	}
 
 	// Init an OnionState and populate with values
@@ -68,7 +67,13 @@ func main() {
 		Foreground: !daemon,
 	}
 
-	onion.Mount(onionstate)
+	ui.Info("[MAIN]", "lower=%s upper=%s mount=%s", filepath.Clean(lowerDir), filepath.Clean(upperDir), filepath.Clean(mountpoint))
+	ui.Info("[MAIN]", "cow=%v showMeta=%v foreground=%v", !noCow, showMeta, !daemon)
+
+	if err := onion.Mount(onionstate); err != nil {
+		ui.Error("[MAIN]", "mount failed: %v", err)
+		os.Exit(1)
+	}
 }
 
 func validatePath(path string) (string, error) {
