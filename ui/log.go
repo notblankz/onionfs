@@ -3,6 +3,8 @@ package ui
 import (
 	"fmt"
 	"os"
+
+	"golang.org/x/term"
 )
 
 const (
@@ -13,15 +15,32 @@ const (
 	colorBlue      = "\033[34m"
 )
 
+var useColor = term.IsTerminal(int(os.Stdout.Fd()))
+
+func SetNoColor() {
+	useColor = false
+}
+
+func buildPrefix(level string, levelColor string, scope string, scopeColor string) string {
+	if useColor {
+		return levelColor + "[" + level + "] " + colorReset +
+			scopeColor + scope + " " + colorReset
+	}
+	return "[" + level + "] " + scope + " "
+}
+
 func Info(scope string, format string, args ...any) {
-	fmt.Fprintf(os.Stdout, colorBoldGreen+"[INFO] "+colorBlue+scope+" "+colorReset+format+"\n", args...)
+	prefix := buildPrefix("INFO", colorBoldGreen, scope, colorBlue)
+	fmt.Fprintf(os.Stdout, prefix+format+"\n", args...)
 }
 
 func Error(scope string, format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorBoldRed+"[ERROR] "+colorYellow+scope+" "+colorReset+format+"\n", args...)
+	prefix := buildPrefix("ERROR", colorBoldRed, scope, colorYellow)
+	fmt.Fprintf(os.Stderr, prefix+format+"\n", args...)
 }
 
 func Fatal(scope string, format string, args ...any) {
-	fmt.Fprintf(os.Stderr, colorBoldRed+"[FATAL] "+colorBlue+scope+" "+colorReset+format+"\n", args...)
+	prefix := buildPrefix("FATAL", colorBoldRed, scope, colorBlue)
+	fmt.Fprintf(os.Stderr, prefix+format+"\n", args...)
 	os.Exit(1)
 }
