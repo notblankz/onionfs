@@ -13,14 +13,13 @@ import (
 
 func main() {
 
-	var noCow, showMeta, daemon bool
+	var showMeta, debug bool
 
 	flag.StringP("lower", "l", "", "lower (read-only) directory [required]")
 	flag.StringP("upper", "u", "", "upper (read-write) directory [required]")
 	flag.StringP("mountpoint", "m", "", "mount point [required]")
-	flag.BoolVar(&noCow, "no-cow", false, "disable copy-on-write")
 	flag.BoolVar(&showMeta, "show-meta", false, "show .wh.* files in directory listings")
-	flag.BoolVar(&daemon, "daemon", false, "run in background (default: foreground)")
+	flag.BoolVar(&debug, "debug", false, "enable debug logging (verbose FUSE output)")
 	flag.Bool("version", false, "print version and exit")
 	// override default usage with custom defined help function
 	flag.Usage = ui.PrintHelp
@@ -62,13 +61,12 @@ func main() {
 		LowerDir:   lowerDirAbs,
 		UpperDir:   upperDirAbs,
 		MountPoint: mountpointAbs,
-		CoW:        !noCow,
 		HideMeta:   !showMeta,
-		Foreground: !daemon,
+		Debug:      debug,
 	}
 
 	ui.Info("[MAIN]", "lower=%s upper=%s mount=%s", filepath.Clean(lowerDir), filepath.Clean(upperDir), filepath.Clean(mountpoint))
-	ui.Info("[MAIN]", "cow=%v showMeta=%v foreground=%v", !noCow, showMeta, !daemon)
+	ui.Info("[MAIN]", "showMeta=%v debug=%v", showMeta, debug)
 
 	if err := onion.Mount(onionstate); err != nil {
 		ui.Error("[MAIN]", "mount failed: %v", err)

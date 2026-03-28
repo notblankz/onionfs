@@ -17,11 +17,8 @@ Required:
   -m, --mountpoint  <path>   mount point
 
 Behaviour:
-      --no-cow               disable copy-on-write
-      --show-meta            show .wh.* files in directory listings
-
-Mode:
-      --daemon               run in background (default: foreground)
+	  --show-meta            show .wh.* files in directory listings
+      --debug                enable debug logging (verbose FUSE output)
 
 Other:
   -h, --help                 print this help

@@ -6,7 +6,6 @@ type OnionState struct {
 	MountPoint string
 
 	// status flags
-	CoW        bool
-	HideMeta   bool
-	Foreground bool
+	HideMeta bool
+	Debug    bool
 }
