@@ -13,7 +13,7 @@ A userspace union filesystem built with FUSE in Go
 From repository root:
 
 ```bash
-go build -o onionfs .
+make build
 ```
 
 ## Usage
